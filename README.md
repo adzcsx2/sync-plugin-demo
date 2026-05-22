@@ -1,39 +1,89 @@
-# Sync-Plugin-Demo
+# Sync Plugin Demo
 
-#### 介绍
-{**以下是 Gitee 平台说明，您可以替换此简介**
-Gitee 是 OSCHINA 推出的基于 Git 的代码托管平台（同时支持 SVN）。专为开发者提供稳定、高效、安全的云端软件开发协作平台
-无论是个人、团队、或是企业，都能够用 Gitee 实现代码托管、项目管理、协作开发。企业项目请看 [https://gitee.com/enterprises](https://gitee.com/enterprises)}
+将远程服务器的日程和待办同步到 Obsidian vault。支持桌面端（定时自动轮询）和手机端（打开即同步 + 手动触发）。
 
-#### 软件架构
-软件架构说明
+---
 
+## 安装
 
-#### 安装教程
+### 方式一：BRAT 插件安装（推荐）
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+BRAT（Beta Reviewers Auto-update Tester）支持从任意 Git 仓库安装插件，无需通过官方市场。
 
-#### 使用说明
+1. 先在 Obsidian 中安装 BRAT 插件（社区插件市场搜索 "BRAT"）
+2. 打开 BRAT 设置，点击 **Add Beta plugin**
+3. 输入本仓库地址：
 
-1.  xxxx
-2.  xxxx
-3.  xxxx
+   ```
+   https://gitee.com/Hoyn/sync-plugin-demo
+   ```
 
-#### 参与贡献
+4. 安装完毕后，在第三方插件列表中找到 **Sync Plugin Demo**，打开开关
 
-1.  Fork 本仓库
-2.  新建 Feat_xxx 分支
-3.  提交代码
-4.  新建 Pull Request
+> BRAT 会自动检测仓库更新，有新版本时会提示升级。
 
+### 方式二：手动安装
 
-#### 特技
+1. 在本仓库页面点击「克隆/下载」→「下载 ZIP」
+2. 解压后将整个文件夹放入 vault 的 `.obsidian/plugins/` 目录
+3. 在 Obsidian 的第三方插件列表中启用 **Sync Plugin Demo**
 
-1.  使用 Readme\_XXX.md 来支持不同的语言，例如 Readme\_en.md, Readme\_zh.md
-2.  Gitee 官方博客 [blog.gitee.com](https://blog.gitee.com)
-3.  你可以 [https://gitee.com/explore](https://gitee.com/explore) 这个地址来了解 Gitee 上的优秀开源项目
-4.  [GVP](https://gitee.com/gvp) 全称是 Gitee 最有价值开源项目，是综合评定出的优秀开源项目
-5.  Gitee 官方提供的使用手册 [https://gitee.com/help](https://gitee.com/help)
-6.  Gitee 封面人物是一档用来展示 Gitee 会员风采的栏目 [https://gitee.com/gitee-stars/](https://gitee.com/gitee-stars/)
+---
+
+## 配置
+
+启用后在插件设置中填写：
+
+| 设置项 | 说明 | 示例 |
+|--------|------|------|
+| Server URL | 同步服务器地址 | 桌面端 `http://127.0.0.1:8006`，手机端填电脑局域网 IP |
+| User ID | 用户标识，需和 Web 端一致 | `alice` |
+| Sync interval | 同步间隔（分钟），仅桌面端生效 | `5` |
+
+---
+
+## 同步效果
+
+| 平台 | 同步方式 |
+|------|----------|
+| 桌面端 | 启动后每隔 N 分钟自动轮询 + 左侧 Ribbon 图标 + 命令面板 `Sync now` |
+| 手机端 | 打开 Obsidian 时同步一次 + Ribbon 图标 + 命令面板 `Sync now` |
+
+同步成功后，vault 中生成以下文件：
+
+```
+Calendar/
+  2026-05-22.md       # 该日期的日程
+
+Todos/
+  待办事项.md          # 待办清单
+```
+
+---
+
+## 自己搭建服务器
+
+本插件需要配合后端服务使用。详见 [Obsidian Demo 项目](https://gitee.com/Hoyn/sync-plugin-demo)。
+
+简要步骤：
+
+```bash
+# 1. 配置
+cp .env.example .env
+
+# 2. 启动
+./start.sh
+
+# 3. 验证
+curl http://127.0.0.1:8006/api/status
+```
+
+---
+
+## 开发
+
+```bash
+npm install
+npm run dev          # 监听模式，文件变更自动重新编译
+npm run build        # 生产构建（类型检查 + 打包）
+```

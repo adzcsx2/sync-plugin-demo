@@ -1,0 +1,11 @@
+{
+  "id": "obsidian-sync-plugin",
+  "name": "Sync Plugin Demo",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Sync calendar events and todos from a remote server into your vault",
+  "author": "Obsidian Demo",
+  "authorUrl": "https://gitee.com/Hoyn/sync-plugin-demo",
+  "fundingUrl": "",
+  "isDesktopOnly": false
+}

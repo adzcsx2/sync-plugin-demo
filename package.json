@@ -1,0 +1,16 @@
+{
+  "name": "obsidian-sync-plugin",
+  "version": "1.0.0",
+  "description": "Sync calendar events and todos into Obsidian vault",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "esbuild": "^0.20.0",
+    "obsidian": "latest",
+    "typescript": "^5.0.0"
+  }
+}
