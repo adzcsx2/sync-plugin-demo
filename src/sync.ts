@@ -4,10 +4,12 @@ import type SyncPlugin from "./main";
 export interface SyncEvent {
   id: string;
   title: string;
-  date: string;
-  time: string;
-  duration_minutes?: number;
+  start_time: string;
+  end_time: string;
   description?: string;
+  location?: string;
+  attendees?: string;
+  agenda?: string;
   action: "create" | "update" | "delete";
 }
 

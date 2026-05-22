@@ -187,7 +187,8 @@ var VaultWriter = class {
       console.log("[SyncPlugin] Event delete ignored (soft delete)");
       return;
     }
-    const filePath = `Calendar/${evt.date}.md`;
+    const date = (evt.start_time || "").slice(0, 10);
+    const filePath = `Calendar/${date}.md`;
     const line = this.formatEventLine(evt);
     await this.appendToFile(filePath, line);
   }
@@ -221,8 +222,19 @@ var VaultWriter = class {
   }
   formatEventLine(evt) {
     const desc = evt.description ? ` - ${evt.description}` : "";
-    const duration = evt.duration_minutes ? ` (${evt.duration_minutes}min)` : "";
-    return `- **${evt.time}** ${evt.title}${duration}${desc}`;
+    const timeLabel = this.formatTimeRange(evt);
+    return `- **${timeLabel}** ${evt.title}${desc}`;
+  }
+  formatTimeRange(evt) {
+    const startTime = (evt.start_time || "").trim();
+    const endTime = (evt.end_time || "").trim();
+    const startMatch = startTime.match(/T(\d{2}:\d{2})$/);
+    const endMatch = endTime.match(/T(\d{2}:\d{2})$/);
+    const startLabel = startMatch ? startMatch[1] : startTime;
+    if (endMatch) {
+      return `${startLabel}-${endMatch[1]}`;
+    }
+    return startLabel;
   }
   formatTodoLine(todo) {
     const checkbox = todo.done ? "[x]" : "[ ]";
