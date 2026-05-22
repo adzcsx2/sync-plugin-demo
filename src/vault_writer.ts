@@ -1,11 +1,12 @@
 import { TFile, type Vault } from "obsidian";
-import type { SyncEvent, SyncTodo } from "./sync";
+import type { SyncEvent, SyncTodo, SyncDoc } from "./sync";
 
 export class VaultWriter {
   vault: Vault;
-  // 已写入的事件/待办 ID 集合，防止 cursor 丢失导致重复写入
+  // 已写入的事件/待办/文档 ID 集合，防止 cursor 丢失导致重复写入
   private writtenEventIds: Set<string> = new Set();
   private writtenTodoIds: Set<string> = new Set();
+  private writtenDocIds: Set<string> = new Set();
 
   constructor(vault: Vault) {
     this.vault = vault;
@@ -28,6 +29,16 @@ export class VaultWriter {
       }
       await this.writeTodo(todo);
       this.writtenTodoIds.add(todo.id);
+    }
+  }
+
+  async writeDocs(docs: SyncDoc[]): Promise<void> {
+    for (const doc of docs) {
+      if (this.writtenDocIds.has(doc.id)) {
+        continue;
+      }
+      await this.writeDoc(doc);
+      this.writtenDocIds.add(doc.id);
     }
   }
 
@@ -55,6 +66,30 @@ export class VaultWriter {
     await this.appendToFile(filePath, line);
   }
 
+  private async writeDoc(doc: SyncDoc): Promise<void> {
+    if (doc.action === "delete" || doc.deleted) {
+      console.log("[SyncPlugin] Doc delete ignored (soft delete)");
+      return;
+    }
+
+    // 文档写入独立文件而非追加
+    const filePath = `Docs/${doc.title}.md`;
+    const content = this.formatDocContent(doc);
+
+    const abstractFile = this.vault.getAbstractFileByPath(filePath);
+    if (abstractFile instanceof TFile) {
+      // 已存在则覆盖
+      await this.vault.modify(abstractFile, content);
+    } else {
+      const dirPath = "Docs";
+      const dir = this.vault.getAbstractFileByPath(dirPath);
+      if (!dir) {
+        await this.vault.createFolder(dirPath);
+      }
+      await this.vault.create(filePath, content);
+    }
+  }
+
   private formatEventLine(evt: SyncEvent): string {
     const desc = evt.description ? ` - ${evt.description}` : "";
     const duration = evt.duration_minutes ? ` (${evt.duration_minutes}min)` : "";
@@ -66,6 +101,28 @@ export class VaultWriter {
     const priority = todo.priority !== "medium" ? ` [!${todo.priority}]` : "";
     const due = todo.due_date ? ` 📅 ${todo.due_date}` : "";
     return `- ${checkbox}${priority} ${todo.title}${due}`;
+  }
+
+  private formatDocContent(doc: SyncDoc): string {
+    const statusLabel: Record<string, string> = {
+      draft: "草稿",
+      published: "已发布",
+      archived: "已归档",
+    };
+    const status = statusLabel[doc.status] || doc.status;
+    const updated = doc.updated_at ? doc.updated_at.slice(0, 10) : "";
+
+    const frontmatter = [
+      "---",
+      `id: ${doc.id}`,
+      `title: ${doc.title}`,
+      `status: ${status}`,
+      updated ? `updated_at: ${updated}` : "",
+      "---",
+      "",
+    ].filter((line) => line !== "").join("\n");
+
+    return frontmatter + (doc.content || "");
   }
 
   private async appendToFile(filePath: string, line: string): Promise<void> {

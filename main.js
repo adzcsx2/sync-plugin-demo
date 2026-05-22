@@ -102,7 +102,7 @@ var SyncEngine = class {
         return;
       }
       const result = body.data;
-      if (!result || !Array.isArray(result.events) || !Array.isArray(result.todos) || typeof result.cursor !== "string") {
+      if (!result || !Array.isArray(result.events) || !Array.isArray(result.todos) || !Array.isArray(result.docs) || typeof result.cursor !== "string") {
         console.error("[SyncPlugin] Invalid sync response format:", body);
         this.plugin.lastSyncTime = "Error";
         this.plugin.updateStatusBar();
@@ -110,11 +110,12 @@ var SyncEngine = class {
       }
       await this.plugin.vaultWriter.writeEvents(result.events);
       await this.plugin.vaultWriter.writeTodos(result.todos);
+      await this.plugin.vaultWriter.writeDocs(result.docs);
       await this.plugin.saveCursor(result.cursor);
       this.plugin.lastSyncTime = (/* @__PURE__ */ new Date()).toLocaleTimeString();
       this.plugin.updateStatusBar();
       console.log(
-        `[SyncPlugin] Synced: ${result.events.length} events, ${result.todos.length} todos`
+        `[SyncPlugin] Synced: ${result.events.length} events, ${result.todos.length} todos, ${result.docs.length} docs`
       );
     } catch (err) {
       console.error("[SyncPlugin] Sync error:", err);
@@ -148,9 +149,10 @@ var SyncEngine = class {
 var import_obsidian3 = require("obsidian");
 var VaultWriter = class {
   constructor(vault) {
-    // 已写入的事件/待办 ID 集合，防止 cursor 丢失导致重复写入
+    // 已写入的事件/待办/文档 ID 集合，防止 cursor 丢失导致重复写入
     this.writtenEventIds = /* @__PURE__ */ new Set();
     this.writtenTodoIds = /* @__PURE__ */ new Set();
+    this.writtenDocIds = /* @__PURE__ */ new Set();
     this.vault = vault;
   }
   async writeEvents(events) {
@@ -171,6 +173,15 @@ var VaultWriter = class {
       this.writtenTodoIds.add(todo.id);
     }
   }
+  async writeDocs(docs) {
+    for (const doc of docs) {
+      if (this.writtenDocIds.has(doc.id)) {
+        continue;
+      }
+      await this.writeDoc(doc);
+      this.writtenDocIds.add(doc.id);
+    }
+  }
   async writeEvent(evt) {
     if (evt.action === "delete") {
       console.log("[SyncPlugin] Event delete ignored (soft delete)");
@@ -189,6 +200,25 @@ var VaultWriter = class {
     const line = this.formatTodoLine(todo);
     await this.appendToFile(filePath, line);
   }
+  async writeDoc(doc) {
+    if (doc.action === "delete" || doc.deleted) {
+      console.log("[SyncPlugin] Doc delete ignored (soft delete)");
+      return;
+    }
+    const filePath = `Docs/${doc.title}.md`;
+    const content = this.formatDocContent(doc);
+    const abstractFile = this.vault.getAbstractFileByPath(filePath);
+    if (abstractFile instanceof import_obsidian3.TFile) {
+      await this.vault.modify(abstractFile, content);
+    } else {
+      const dirPath = "Docs";
+      const dir = this.vault.getAbstractFileByPath(dirPath);
+      if (!dir) {
+        await this.vault.createFolder(dirPath);
+      }
+      await this.vault.create(filePath, content);
+    }
+  }
   formatEventLine(evt) {
     const desc = evt.description ? ` - ${evt.description}` : "";
     const duration = evt.duration_minutes ? ` (${evt.duration_minutes}min)` : "";
@@ -199,6 +229,25 @@ var VaultWriter = class {
     const priority = todo.priority !== "medium" ? ` [!${todo.priority}]` : "";
     const due = todo.due_date ? ` \u{1F4C5} ${todo.due_date}` : "";
     return `- ${checkbox}${priority} ${todo.title}${due}`;
+  }
+  formatDocContent(doc) {
+    const statusLabel = {
+      draft: "\u8349\u7A3F",
+      published: "\u5DF2\u53D1\u5E03",
+      archived: "\u5DF2\u5F52\u6863"
+    };
+    const status = statusLabel[doc.status] || doc.status;
+    const updated = doc.updated_at ? doc.updated_at.slice(0, 10) : "";
+    const frontmatter = [
+      "---",
+      `id: ${doc.id}`,
+      `title: ${doc.title}`,
+      `status: ${status}`,
+      updated ? `updated_at: ${updated}` : "",
+      "---",
+      ""
+    ].filter((line) => line !== "").join("\n");
+    return frontmatter + (doc.content || "");
   }
   async appendToFile(filePath, line) {
     const dirPath = filePath.substring(0, filePath.lastIndexOf("/"));

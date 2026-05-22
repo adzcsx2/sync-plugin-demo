@@ -20,9 +20,20 @@ export interface SyncTodo {
   action: "create" | "update" | "delete";
 }
 
+export interface SyncDoc {
+  id: string;
+  title: string;
+  content: string;
+  status: string;
+  action: "create" | "update" | "delete";
+  deleted?: number;
+  updated_at?: string;
+}
+
 export interface SyncResult {
   events: SyncEvent[];
   todos: SyncTodo[];
+  docs: SyncDoc[];
   cursor: string;
 }
 
@@ -65,7 +76,7 @@ export class SyncEngine {
       const result: SyncResult = body.data;
 
       // 运行时校验 API 响应数据结构
-      if (!result || !Array.isArray(result.events) || !Array.isArray(result.todos) || typeof result.cursor !== "string") {
+      if (!result || !Array.isArray(result.events) || !Array.isArray(result.todos) || !Array.isArray(result.docs) || typeof result.cursor !== "string") {
         console.error("[SyncPlugin] Invalid sync response format:", body);
         this.plugin.lastSyncTime = "Error";
         this.plugin.updateStatusBar();
@@ -75,13 +86,14 @@ export class SyncEngine {
       // 写入 vault 文件
       await this.plugin.vaultWriter.writeEvents(result.events);
       await this.plugin.vaultWriter.writeTodos(result.todos);
+      await this.plugin.vaultWriter.writeDocs(result.docs);
 
       await this.plugin.saveCursor(result.cursor);
       this.plugin.lastSyncTime = new Date().toLocaleTimeString();
       this.plugin.updateStatusBar();
 
       console.log(
-        `[SyncPlugin] Synced: ${result.events.length} events, ${result.todos.length} todos`
+        `[SyncPlugin] Synced: ${result.events.length} events, ${result.todos.length} todos, ${result.docs.length} docs`
       );
     } catch (err) {
       console.error("[SyncPlugin] Sync error:", err);
