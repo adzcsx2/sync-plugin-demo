@@ -23,7 +23,7 @@ __export(main_exports, {
   default: () => SyncPlugin
 });
 module.exports = __toCommonJS(main_exports);
-var import_obsidian3 = require("obsidian");
+var import_obsidian4 = require("obsidian");
 
 // src/settings.ts
 var import_obsidian = require("obsidian");
@@ -53,15 +53,21 @@ var SyncSettingTab = class extends import_obsidian.PluginSettingTab {
         await this.plugin.saveSettings();
       })
     );
-    new import_obsidian.Setting(containerEl).setName("Sync interval (minutes)").setDesc("How often to sync (desktop only)").addText(
-      (text) => text.setPlaceholder("5").setValue(String(this.plugin.settings.syncIntervalMinutes)).onChange(async (value) => {
-        const num = parseInt(value, 10);
-        if (!isNaN(num) && num > 0) {
+    const intervalSetting = new import_obsidian.Setting(containerEl).setName("Sync interval (minutes)").setDesc("How often to sync (desktop only)").addText((text) => {
+      text.setPlaceholder("5").setValue(String(this.plugin.settings.syncIntervalMinutes)).onChange(async (value) => {
+        const trimmed = value.trim();
+        const num = Number(trimmed);
+        if (trimmed !== "" && !isNaN(num) && num > 0 && Number.isInteger(num)) {
           this.plugin.settings.syncIntervalMinutes = num;
+          intervalSetting.setDesc("How often to sync (desktop only)");
           await this.plugin.saveSettings();
+          this.plugin.syncEngine.restartPolling();
+        } else {
+          intervalSetting.setDesc("Please enter a positive integer (e.g. 5)");
         }
-      })
-    );
+      });
+      return text;
+    });
   }
 };
 
@@ -96,6 +102,14 @@ var SyncEngine = class {
         return;
       }
       const result = body.data;
+      if (!result || !Array.isArray(result.events) || !Array.isArray(result.todos) || typeof result.cursor !== "string") {
+        console.error("[SyncPlugin] Invalid sync response format:", body);
+        this.plugin.lastSyncTime = "Error";
+        this.plugin.updateStatusBar();
+        return;
+      }
+      await this.plugin.vaultWriter.writeEvents(result.events);
+      await this.plugin.vaultWriter.writeTodos(result.todos);
       await this.plugin.saveCursor(result.cursor);
       this.plugin.lastSyncTime = (/* @__PURE__ */ new Date()).toLocaleTimeString();
       this.plugin.updateStatusBar();
@@ -104,6 +118,8 @@ var SyncEngine = class {
       );
     } catch (err) {
       console.error("[SyncPlugin] Sync error:", err);
+      this.plugin.lastSyncTime = "Error";
+      this.plugin.updateStatusBar();
     }
   }
   startPolling() {
@@ -121,21 +137,38 @@ var SyncEngine = class {
       this.timer = null;
     }
   }
+  restartPolling() {
+    console.log("[SyncPlugin] Restarting polling with new interval");
+    this.stopPolling();
+    this.startPolling();
+  }
 };
 
 // src/vault_writer.ts
+var import_obsidian3 = require("obsidian");
 var VaultWriter = class {
   constructor(vault) {
+    // 已写入的事件/待办 ID 集合，防止 cursor 丢失导致重复写入
+    this.writtenEventIds = /* @__PURE__ */ new Set();
+    this.writtenTodoIds = /* @__PURE__ */ new Set();
     this.vault = vault;
   }
   async writeEvents(events) {
     for (const evt of events) {
+      if (this.writtenEventIds.has(evt.id)) {
+        continue;
+      }
       await this.writeEvent(evt);
+      this.writtenEventIds.add(evt.id);
     }
   }
   async writeTodos(todos) {
     for (const todo of todos) {
+      if (this.writtenTodoIds.has(todo.id)) {
+        continue;
+      }
       await this.writeTodo(todo);
+      this.writtenTodoIds.add(todo.id);
     }
   }
   async writeEvent(evt) {
@@ -176,9 +209,9 @@ var VaultWriter = class {
       }
     }
     const abstractFile = this.vault.getAbstractFileByPath(filePath);
-    if (abstractFile) {
+    if (abstractFile instanceof import_obsidian3.TFile) {
       await this.vault.append(abstractFile, line + "\n");
-    } else {
+    } else if (abstractFile === null) {
       await this.vault.create(filePath, line + "\n");
     }
   }
@@ -186,9 +219,9 @@ var VaultWriter = class {
 
 // src/main.ts
 function isMobile() {
-  return import_obsidian3.Platform.isMobile || import_obsidian3.Platform.isAndroidApp || import_obsidian3.Platform.isIosApp;
+  return import_obsidian4.Platform.isMobile || import_obsidian4.Platform.isAndroidApp || import_obsidian4.Platform.isIosApp;
 }
-var SyncPlugin = class extends import_obsidian3.Plugin {
+var SyncPlugin = class extends import_obsidian4.Plugin {
   constructor() {
     super(...arguments);
     this.lastSyncTime = "";
@@ -213,7 +246,9 @@ var SyncPlugin = class extends import_obsidian3.Plugin {
     if (isMobile()) {
       console.log("[SyncPlugin] Mobile platform detected - manual sync only");
       this.app.workspace.onLayoutReady(() => {
-        this.syncEngine.syncNow();
+        this.syncEngine.syncNow().catch((err) => {
+          console.error("[SyncPlugin] Initial mobile sync failed:", err);
+        });
       });
     } else {
       console.log("[SyncPlugin] Desktop platform detected - starting auto-polling");
@@ -235,11 +270,11 @@ var SyncPlugin = class extends import_obsidian3.Plugin {
   }
   async loadCursor() {
     const data = await this.loadData();
-    return data?.cursor || null;
+    return data?._cursor || null;
   }
   async saveCursor(cursor) {
     const data = await this.loadData();
-    data.cursor = cursor;
+    data._cursor = cursor;
     await this.saveData(data);
   }
   updateStatusBar() {
