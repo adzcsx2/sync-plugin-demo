@@ -80,6 +80,37 @@ curl http://127.0.0.1:8006/api/status
 
 ---
 
+## 发布
+
+BRAT 通过 GitHub Release 检测版本更新，每次发布新版本时执行：
+
+```bash
+# 1. 编译
+npm run build
+
+# 2. 打 tag 并推送
+git add main.js manifest.json versions.json
+git commit -m "release: v1.0.1"
+git tag -a 1.0.1 -m "v1.0.1"
+git push origin master --tags
+
+# 3. 创建 GitHub Release（上传 main.js, manifest.json, styles.css）
+gh release create 1.0.1 \
+  --title "v1.0.1" \
+  --notes "版本更新说明" \
+  main.js manifest.json styles.css
+```
+
+`versions.json` 中记录版本与最低 Obsidian 版本的对应关系：
+
+```json
+{
+  "1.0.1": "1.5.0"
+}
+```
+
+---
+
 ## 开发
 
 ```bash
